@@ -1,20 +1,29 @@
 services:
   db:
     image: postgres:16
+    container_name: ma-webapp-db-1
     environment:
       POSTGRES_USER: webapp
-      POSTGRES_PASSWORD: webpass
+      POSTGRES_PASSWORD: secret
       POSTGRES_DB: webdb
-    volumes:
-      - dbdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-    restart: unless-stopped
+    volumes:
+      - dbdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U webapp -d webdb"]
       interval: 5s
       timeout: 3s
       retries: 20
+
+  chesspy:
+    build:
+      context: ./chesspy
+    container_name: ma-webapp-chesspy-1
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    # (option) ajoute un healthcheck plus tard si tu veux attendre /health
 
   web:
     build:
@@ -27,7 +36,7 @@ services:
       - .:/app
       - /app/node_modules
     environment:
-      NODE_ENV: "development"
+      NODE_ENV: development
       CHOKIDAR_USEPOLLING: "1"
       CHOKIDAR_INTERVAL: "1000"
     env_file:
@@ -35,7 +44,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      chesspy:
+        condition: service_started
     restart: unless-stopped
 
 volumes:
   dbdata: {}
+
