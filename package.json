@@ -23,3 +23,11 @@
   },
   "type": "module"
 }
+"scripts": {
+  "dev": "nodemon --watch . --ext js,mjs,cjs,json server.js",
+  "start": "node server.js",
+  "docker:up": "docker compose up -d --build",
+  "docker:down": "docker compose down",
+  "docker:logs": "docker compose logs -f --since=1m"
+}
+
