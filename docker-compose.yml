@@ -9,3 +9,6 @@ services:
     environment:
       - NODE_ENV=development
     command: ["npm","run","dev"]
+    restart: unless-stopped
+    env_file:
+      - ./.env
