@@ -24,7 +24,7 @@ r.patch("/:id", async (req, res) => {
   const id = Number(req.params.id);
   const { title, done } = req.body ?? {};
   const { rows } = await pool.query(
-    "update todos set title=coalesce($1,title), done=coalesce($2,done) where id=$3 returning id,title,done,created_at",
+    "update todos set title = coalesce($1, title), done = coalesce($2, done) where id=$3 returning id, title, done, created_at",
     [title ?? null, typeof done === "boolean" ? done : null, id]
   );
   if (!rows.length) return res.sendStatus(404);

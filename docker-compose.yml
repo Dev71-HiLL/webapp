@@ -1,22 +1,4 @@
 services:
-  web:
-    build: .
-    ports: ["3000:3000"]
-    volumes:
-      - .:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=1
-      - CHOKIDAR_INTERVAL=1000
-    env_file:
-      - ./.env
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-    command: ["npx","nodemon","--legacy-watch","--watch",".","--ext","js,mjs,cjs,json","server.js"]
-
   db:
     image: postgres:16
     environment:
@@ -34,5 +16,26 @@ services:
       timeout: 3s
       retries: 20
 
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["npm","start"]
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      NODE_ENV: "development"
+      CHOKIDAR_USEPOLLING: "1"
+      CHOKIDAR_INTERVAL: "1000"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
-  dbdata:
+  dbdata: {}
