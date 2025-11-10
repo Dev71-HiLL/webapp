@@ -2,38 +2,136 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>Chess (C → WASM)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Échecs (IA Python)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Plateau (web component) -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/chessboard-element@2/dist/chessboard-element.js"></script>
+  <!-- Règles côté client -->
+  <script src="https://cdn.jsdelivr.net/npm/chess.js@1.0.0/dist/chess.min.js"></script>
+
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    header { padding: 16px; border-bottom: 1px solid #3334; }
+    main { padding: 16px; display: grid; gap: 24px; grid-template-columns: 520px 1fr; }
+    @media (max-width: 1000px){ main { grid-template-columns: 1fr; } }
+
+    /* Assure une TAILLE visible du plateau */
+    chess-board {
+      width: 500px; height: 500px; max-width: 95vw; max-height: 95vw;
+      border-radius: 12px; box-shadow: 0 2px 10px #0003;
+      --light-square-color: #f0d9b5;
+      --dark-square-color:  #b58863;
+    }
+
+    .row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    button, input { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid #555; background: transparent; }
+    button.primary { background: #2563eb; color: white; border-color: #2563eb; }
+    .panel { border: 1px solid #3334; border-radius: 12px; padding: 16px; }
+    #log { height: 220px; overflow: auto; white-space: pre-wrap; background: #0002; padding: 8px; border-radius: 8px; }
+    code { background: #0002; padding: 2px 6px; border-radius: 6px; }
+  </style>
 </head>
 <body>
-  <h1>Chess (C → WebAssembly)</h1>
-  <button id="btn-add">Test add(40,2)</button>
-  <button id="btn-move">best_move(FEN initial)</button>
-  <pre id="out"></pre>
+  <header>
+    <h1>Échecs (IA Python)</h1>
+    <div>API: <code>/api/chess/best_move</code> • Santé: <code>/api/health</code></div>
+  </header>
 
-  <script src="/chess.js"></script>
+  <main>
+    <section>
+      <!-- IMPORTANT: position="start" + taille CSS ci-dessus -->
+      <chess-board id="board" position="start" draggable-pieces></chess-board>
+
+      <div class="row">
+        <button id="btn-reset">↺ Nouvelle partie</button>
+        <button id="btn-undo">⟲ Annuler</button>
+        <button id="btn-ai" class="primary">🤖 IA (Python) jouer</button>
+        <button id="btn-flip">⇆ Retourner</button>
+      </div>
+
+      <div class="row">
+        <label for="fen">FEN :</label>
+        <input id="fen" style="flex:1 1 auto; min-width:240px" />
+        <button id="btn-load">Charger FEN</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>Journal</h3>
+      <div id="log"></div>
+      <div class="row" style="margin-top:12px">
+        <button id="btn-health">Tester santé</button>
+        <button id="btn-dbhealth">Tester DB</button>
+        <button id="btn-chess-health">Tester chesspy</button>
+        <button id="btn-clear" style="border-color:#be123c; color:#be123c">Vider log</button>
+      </div>
+    </section>
+  </main>
+
   <script>
-    const waitReady = new Promise((resolve) => {
-      const check = () => (typeof Module !== 'undefined' && Module.calledRun) ? resolve(Module) : setTimeout(check, 50);
-      check();
+    // État local
+    const game = new Chess();
+    const board = document.getElementById('board');
+    const fenInput = document.getElementById('fen');
+    const logEl = document.getElementById('log');
+
+    const log = (t) => { logEl.textContent += `[${new Date().toLocaleTimeString()}] ${t}\n`; logEl.scrollTop = logEl.scrollHeight; };
+
+    const syncBoard = () => { board.setPosition(game.fen()); fenInput.value = game.fen(); };
+    syncBoard(); log("Prêt. Déplace une pièce puis demande à l’IA.");
+
+    // Drag & drop
+    board.addEventListener('drag-start', (e) => {
+      const color = e.detail.piece.startsWith('w') ? 'w' : 'b';
+      if (game.turn() !== color) e.preventDefault();
+    });
+    board.addEventListener('drop', (e) => {
+      const { source, target, setAction } = e.detail;
+      const mv = game.move({ from: source, to: target, promotion: 'q' });
+      if (!mv) return setAction('snapback');
+      setAction('move'); syncBoard(); log(`Tu joues: ${mv.san}`);
     });
 
-    (async () => {
-      const mod = await waitReady;
-      const c_add  = mod.cwrap('add', 'number', ['number','number']);
-      const c_best = mod.cwrap('best_move', 'string', ['string']);
+    // Boutons
+    document.getElementById('btn-reset').onclick = () => { game.reset(); syncBoard(); log("Nouvelle partie."); };
+    document.getElementById('btn-undo').onclick = () => { const m = game.undo(); if (m) log(`Annulé: ${m.san}`); syncBoard(); };
+    document.getElementById('btn-flip').onclick = () => board.flip();
+    document.getElementById('btn-load').onclick = () => { try { game.load(fenInput.value.trim()); syncBoard(); log("FEN chargé."); } catch(e){ log("FEN invalide: "+e.message);} };
+    document.getElementById('btn-clear').onclick = () => { logEl.textContent = ""; };
 
-      document.getElementById('btn-add').onclick = () => {
-        const r = c_add(40, 2);
-        document.getElementById('out').textContent += `add(40,2) = ${r}\n`;
-      };
+    // IA Python
+    document.getElementById('btn-ai').onclick = async () => {
+      if (game.isGameOver()) return log("Partie terminée.");
+      const fen = game.fen();
+      try {
+        const r = await fetch("/api/chess/best_move", {
+          method: "POST", headers: {"content-type":"application/json"},
+          body: JSON.stringify({ fen })
+        });
+        const data = await r.json();
+        if (!r.ok || !data.move) return log("Erreur IA: " + JSON.stringify(data));
+        const uci = data.move; // e2e4, e7e8q...
+        const from = uci.slice(0,2), to = uci.slice(2,4), promo = uci.length>4 ? uci.slice(4) : undefined;
+        const mv = game.move({ from, to, promotion: promo });
+        if (!mv) return log("Coup IA illégal: " + uci);
+        syncBoard(); log(`IA: ${mv.san} (${uci})`);
+        if (game.in_checkmate()) log("Échec et mat !");
+        else if (game.in_draw()) log("Nulle.");
+        else if (game.in_check()) log("Échec !");
+      } catch (e) { log("Erreur réseau IA: " + e.message); }
+    };
 
-      const START_FEN = "rn1qkbnr/ppp1pppp/8/3p4/3P4/5N2/PPPBPPPP/RN1QKB1R w KQkq - 0 1";
-      document.getElementById('btn-move').onclick = () => {
-        const mv = c_best(START_FEN);
-        document.getElementById('out').textContent += `best_move → ${mv}\n`;
-      };
-    })();
+    // Tests santé
+    document.getElementById('btn-health').onclick = async () =>
+      log("web /api/health → " + JSON.stringify(await fetch('/api/health').then(r=>r.json()).catch(e=>({error:e.message}))));
+
+    document.getElementById('btn-dbhealth').onclick = async () =>
+      log("web /api/dbhealth → " + JSON.stringify(await fetch('/api/dbhealth').then(r=>r.json()).catch(e=>({error:e.message}))));
+
+    document.getElementById('btn-chess-health').onclick = async () =>
+      log("chesspy /health → " + JSON.stringify(await fetch('http://localhost:8000/health').then(r=>r.json()).catch(e=>({error:e.message}))));
   </script>
 </body>
 </html>
