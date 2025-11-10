@@ -8,23 +8,19 @@
 <body>
   <h1>Chess (C → WebAssembly)</h1>
   <button id="btn-add">Test add(40,2)</button>
-  <button id="btn-move">Demander best_move(FEN initial)</button>
+  <button id="btn-move">best_move(FEN initial)</button>
   <pre id="out"></pre>
 
   <script src="/chess.js"></script>
   <script>
-    // Emscripten crée une factory globale "Module" quand MODULARIZE=1 est désactivé,
-    // ici on l'utilise en mode non-ES6 pour simplicité:
-    const ready = new Promise((resolve) => {
-      if (typeof Module !== 'undefined' && Module.calledRun) return resolve(Module);
+    const waitReady = new Promise((resolve) => {
       const check = () => (typeof Module !== 'undefined' && Module.calledRun) ? resolve(Module) : setTimeout(check, 50);
       check();
     });
 
     (async () => {
-      const mod = await ready;
-
-      const c_add = mod.cwrap('add', 'number', ['number','number']);
+      const mod = await waitReady;
+      const c_add  = mod.cwrap('add', 'number', ['number','number']);
       const c_best = mod.cwrap('best_move', 'string', ['string']);
 
       document.getElementById('btn-add').onclick = () => {
@@ -32,8 +28,7 @@
         document.getElementById('out').textContent += `add(40,2) = ${r}\n`;
       };
 
-      // FEN initial (partie standard)
-      const START_FEN = "rn1qkbnr/ppp1pppp/8/3p4/3P4/5N2/PPPBPPPP/RN1QKB1R w KQkq - 0 1"; // un FEN d'exemple
+      const START_FEN = "rn1qkbnr/ppp1pppp/8/3p4/3P4/5N2/PPPBPPPP/RN1QKB1R w KQkq - 0 1";
       document.getElementById('btn-move').onclick = () => {
         const mv = c_best(START_FEN);
         document.getElementById('out').textContent += `best_move → ${mv}\n`;
