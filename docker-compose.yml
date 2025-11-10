@@ -7,13 +7,15 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=1
+      - CHOKIDAR_INTERVAL=1000
     env_file:
       - ./.env
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
-    command: ["npm","run","dev"]
+    command: ["npx","nodemon","--legacy-watch","--watch",".","--ext","js,mjs,cjs,json","server.js"]
 
   db:
     image: postgres:16
