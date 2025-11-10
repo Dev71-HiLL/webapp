@@ -1,14 +1,36 @@
 services:
   web:
     build: .
-    ports:
-      - "3000:3000"
+    ports: ["3000:3000"]
     volumes:
       - .:/app
       - /app/node_modules
     environment:
       - NODE_ENV=development
-    command: ["npm","run","dev"]
-    restart: unless-stopped
     env_file:
       - ./.env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["npm","run","dev"]
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: webapp
+      POSTGRES_PASSWORD: webpass
+      POSTGRES_DB: webdb
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webapp -d webdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  dbdata:
